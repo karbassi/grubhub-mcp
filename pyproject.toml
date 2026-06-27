@@ -1,6 +1,6 @@
 [project]
 name = "grubhub-mcp"
-version = "1.1.6"
+version = "1.2.0"
 description = "MCP server for Grubhub — search restaurants, browse menus, manage cart, place orders"
 requires-python = ">=3.11"
 license = "MIT"

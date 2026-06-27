@@ -11,8 +11,31 @@ from mcp.server.fastmcp import FastMCP
 from ..client import get_client
 
 
-async def _fetch_order_history_raw(client: Any) -> dict[str, Any]:
-    return await client.get(f"/diners/{client.session.diner_udid}/orders")
+async def _fetch_order_history_raw(
+    client: Any, page_size: int = 20, page_num: int = 1
+) -> dict[str, Any]:
+    """Fetch one page of order history via the diner ``search_listing`` endpoint.
+
+    The legacy ``/diners/{id}/orders`` endpoint only ever returns the most recent
+    ~25 orders and carries no pagination metadata, so the full history is
+    unreachable through it. ``search_listing`` is what the Grubhub web app uses:
+    it honors ``pageNum``/``pageSize`` and returns a ``pager`` with
+    ``total_pages``. Results are normalized back to ``{"orders": [...]}`` so the
+    rest of the module is unchanged, with the ``pager`` passed through.
+    """
+    data = await client.get(
+        f"/diners/{client.session.diner_udid}/search_listing",
+        params=[
+            ("pageNum", page_num),
+            ("pageSize", page_size),
+            ("facet", "scheduled:false"),
+            ("facet", "orderType:ALL"),
+            ("includePartnerOrders", "true"),
+            ("sorts", "default"),
+        ],
+    )
+    orders = (data.get("results") or []) + (data.get("partner_results") or [])
+    return {"orders": orders, "pager": data.get("pager") or {}}
 
 
 def _require_authenticated(client: Any, action: str) -> str | None:
@@ -22,16 +45,16 @@ def _require_authenticated(client: Any, action: str) -> str | None:
 
 
 async def _find_order_in_history(client: Any, order_id: str) -> dict[str, Any] | None:
-    history = await _fetch_order_history_raw(client)
-    orders = history.get("orders", []) if isinstance(history, dict) else []
-    return next(
-        (
-            order
-            for order in orders
-            if order.get("id") == order_id or order.get("group_id") == order_id
-        ),
-        None,
-    )
+    page = 1
+    total_pages = 1
+    while page <= total_pages:
+        history = await _fetch_order_history_raw(client, page_size=20, page_num=page)
+        for order in history.get("orders", []):
+            if order.get("id") == order_id or order.get("group_id") == order_id:
+                return order
+        total_pages = (history.get("pager") or {}).get("total_pages") or 1
+        page += 1
+    return None
 
 
 def _build_cart_payload_from_order(order: dict[str, Any]) -> dict[str, Any]:
@@ -156,21 +179,39 @@ def register(mcp: FastMCP) -> None:
         return json.dumps(data, indent=2)
 
     @mcp.tool()
-    async def get_order_history(page_size: int = 10, page_num: int = 0) -> str:
-        """Get past order history. Requires authentication.
+    async def get_order_history(page_size: int = 20, page_num: int = 1) -> str:
+        """Get past order history (paginated). Requires authentication.
+
+        Pagination is server-side via the ``search_listing`` endpoint, so the
+        full history is reachable -- iterate ``page_num`` from 1 up to
+        ``pagination.total_pages`` in the response.
 
         Args:
-            page_size: Number of orders per page (default 10)
-            page_num: Page number (default 0)
+            page_size: Orders per page (default 20)
+            page_num: 1-based page number (default 1)
         """
         client = get_client()
         auth_error = _require_authenticated(client, "view order history")
         if auth_error:
             return auth_error
 
-        data = await _fetch_order_history_raw(client)
-        data = _paginate_orders(data, page_size=page_size, page_num=page_num)
-        return json.dumps(data, indent=2)
+        data = await _fetch_order_history_raw(
+            client, page_size=page_size, page_num=page_num
+        )
+        pager = data.get("pager") or {}
+        return json.dumps(
+            {
+                "orders": data["orders"],
+                "pagination": {
+                    "page_size": page_size,
+                    "page_num": page_num,
+                    "returned": len(data["orders"]),
+                    "total_pages": pager.get("total_pages"),
+                    "current_page": pager.get("current_page"),
+                },
+            },
+            indent=2,
+        )
 
     @mcp.tool()
     async def track_order(order_id: str) -> str:
