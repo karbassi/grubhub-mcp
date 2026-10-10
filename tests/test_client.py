@@ -399,6 +399,29 @@ class ClientRefreshTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.client.session.is_authenticated)
         self.assertEqual(module.GrubhubSession().diner_udid, "diner-b")
 
+    async def test_stale_anonymous_response_does_not_replace_newer_otp_session(self):
+        from src.grubhub_mcp.auth import create_anonymous_session
+        self.client.session.clear()
+        newer = module.GrubhubSession()
+        newer.set_anonymous({"auth_token": "otp-anon"})
+        newer.csrf_token = "challenge"
+        newer._save()
+        self.transport(lambda _: httpx.Response(200, json={"auth_token": "stale-anon"}))
+        await create_anonymous_session(self.client)
+        persisted = module.GrubhubSession()
+        self.assertEqual(persisted.auth_token, "otp-anon")
+        self.assertEqual(persisted.csrf_token, "challenge")
+        self.assertEqual(self.client.session.auth_token, "otp-anon")
+
+    async def test_anonymous_response_after_logout_marker_gives_browsing_token(self):
+        from src.grubhub_mcp.auth import create_anonymous_session
+        self.client.session.clear()
+        module.GrubhubSession().clear(persist_logout=True)
+        self.transport(lambda _: httpx.Response(200, json={"auth_token": "fresh-anon"}))
+        await create_anonymous_session(self.client)
+        self.assertEqual(self.client.session.auth_token, "fresh-anon")
+        self.assertFalse(module.GrubhubSession().is_authenticated)
+
     async def test_logout_does_not_clear_new_login_completed_during_request(self):
         from src.grubhub_mcp.auth import login, logout
         async def handler(request):

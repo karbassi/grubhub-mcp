@@ -21,10 +21,14 @@ async def create_anonymous_session(client: GrubhubClient) -> dict[str, Any]:
         "client_id": API_KEY,
         "scope": "anonymous",
     }
+    generation = client.session.login_generation
     data = await client.post("/auth/anon", data=payload, auth_required=False)
     async with client.session_transition():
-        # A stale browsing process must not replace a newer authenticated login.
-        if not client.session.is_authenticated:
+        # A stale browsing response must not replace a newer login, nor a newer
+        # anonymous/OTP session another invocation installed meanwhile. A
+        # credential-free logout marker may be replaced: it holds no token.
+        unchanged = client.session.login_generation == generation or not client.session.auth_token
+        if not client.session.is_authenticated and unchanged:
             client.session.set_anonymous(data)
     return data
 
