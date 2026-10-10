@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.7 (2026-10-09)
+
+### Bug Fixes
+
+- Pin the MCP dependency to the compatible 1.x API and refresh/persist sessions safely.
+- Paginate the full order history server-side and search all pages for order fallbacks.
+
+
 ## v1.1.6 (2026-05-06)
 
 ### Bug Fixes

@@ -32,6 +32,9 @@ jobs:
         run: |
           uv sync --extra dev
 
+      - name: Run tests
+        run: uv run python -m unittest discover -s tests -v
+
       - name: Python Semantic Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

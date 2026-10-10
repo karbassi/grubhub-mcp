@@ -23,6 +23,11 @@ async def _fetch_order_history_raw(
     ``total_pages``. Results are normalized back to ``{"orders": [...]}`` so the
     rest of the module is unchanged, with the ``pager`` passed through.
     """
+    # Validate page_size and page_num BEFORE making API calls
+    if page_size <= 0:
+        raise ValueError("page_size must be a positive integer")
+    if page_num <= 0:
+        raise ValueError("page_num must be a positive integer")
     data = await client.get(
         f"/diners/{client.session.diner_udid}/search_listing",
         params=[
@@ -103,28 +108,6 @@ def _build_cart_payload_from_order(order: dict[str, Any]) -> dict[str, Any]:
         }
 
     return payload
-
-
-def _paginate_orders(data: dict[str, Any], page_size: int, page_num: int) -> dict[str, Any]:
-    orders = data.get("orders")
-    if not isinstance(orders, list):
-        return data
-
-    page_size = max(page_size, 1)
-    page_num = max(page_num, 0)
-    start = page_num * page_size
-    end = start + page_size
-    paged_orders = orders[start:end]
-    return {
-        "orders": paged_orders,
-        "pagination": {
-            "page_size": page_size,
-            "page_num": page_num,
-            "returned": len(paged_orders),
-            "total_orders": len(orders),
-            "server_side_pagination_honored": len(orders) <= page_size,
-        },
-    }
 
 
 def register(mcp: FastMCP) -> None:
