@@ -85,6 +85,41 @@ grubhub
 python -m grubhub_mcp
 ```
 
+## Shared HTTP server
+
+By default every client starts its own stdio process. To run one long-lived server that many clients share, use the streamable-HTTP transport:
+
+```bash
+GRUBHUB_MCP_TRANSPORT=http GRUBHUB_MCP_READ_ONLY=1 GRUBHUB_MCP_PORT=8507 grubhub
+```
+
+```json
+{
+  "mcpServers": {
+    "grubhub": { "type": "http", "url": "http://127.0.0.1:8507/mcp" }
+  }
+}
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `GRUBHUB_MCP_TRANSPORT` | `stdio` | `stdio` or `http` (streamable HTTP, served at `/mcp`) |
+| `GRUBHUB_MCP_HOST` | `127.0.0.1` | Bind address. Must be `127.0.0.1`, `localhost`, or `::1`; anything else exits |
+| `GRUBHUB_MCP_PORT` | `8507` | Listen port |
+| `GRUBHUB_MCP_ALLOWED_HOSTS` | (none) | Comma-separated extra `Host` header values to accept, e.g. a reverse proxy's `mcp.example.com` |
+| `GRUBHUB_MCP_ALLOWED_ORIGINS` | (none) | Comma-separated `Origin` values to accept from browser-based clients, e.g. `https://mcp.example.com` |
+| `GRUBHUB_MCP_READ_ONLY` | off | When `1`/`true`/`yes`/`on`, register only non-mutating tools (any transport) |
+
+These settings take precedence over FastMCP's own `FASTMCP_HOST` / `FASTMCP_PORT` environment variables.
+
+The endpoint has **no authentication**: anything that can connect to it can use every registered tool with your saved Grubhub login, including **placing real food orders charged to your saved payment method**, changing your address and password, and logging you out. So:
+
+- **Set `GRUBHUB_MCP_READ_ONLY=1` for any shared HTTP deployment.** It is off by default only so existing stdio setups keep every tool. Read-only mode exposes just the tools that change nothing: `get_session_info`, `search_restaurants`, `autocomplete_search`, `get_restaurant`, `get_menu`, `get_menu_item`, `get_cart`, `get_order`, `get_order_history`, `track_order`, `get_profile`, `get_addresses`, `get_favorites`, `get_payment_methods`, `get_gift_card_balance`. Ordering, cart, tip, gift-card, profile, address, favorite, password and login/logout/OTP tools are not registered at all, so a client cannot call them even if its own permissions would allow it.
+- Read-only mode also leaves out the login tools, because a login, logout or OTP verification replaces the session every client shares. Log in from a separate stdio instance that uses the same `GRUBHUB_SESSION_DIR`, then restart the HTTP server so it loads the new session. Token refreshes are shared through the session file automatically.
+- The server only binds to loopback. Any local process can still connect, so only use HTTP mode on a machine where every local user and process is trusted with your Grubhub account.
+- DNS-rebinding protection is always on: requests whose `Host` is not `127.0.0.1:<port>`, `localhost:<port>`, `[::1]:<port>` or an entry in `GRUBHUB_MCP_ALLOWED_HOSTS` are rejected, as are requests carrying an `Origin` not listed in `GRUBHUB_MCP_ALLOWED_ORIGINS`. That check **only** stops web pages from reaching the server through DNS rebinding. It does not authenticate anyone.
+- To reach it from another machine, put it behind a reverse proxy that **controls who can connect** (a bearer token, mTLS, an IP allowlist on a private network, or similar), and add the proxy's hostname to `GRUBHUB_MCP_ALLOWED_HOSTS`. Never expose the port or the proxy publicly without access control.
+
 ## Authentication
 
 **No login required** for browsing — search restaurants, view menus, and check prices without an account. The server automatically creates an anonymous session.
