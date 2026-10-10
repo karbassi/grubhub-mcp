@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-10-10)
+
+### Bug Fixes
+
+- **deps**: Pin mcp[cli]>=1.2,<2 so the server starts
+  ([`0fe0657`](https://github.com/karbassi/grubhub-mcp/commit/0fe065713bcc1cb6b69d69f7b3ef8ad08393ee1d))
+
+- **order**: Use search_listing endpoint so full order history paginates
+  ([`6b7ea9d`](https://github.com/karbassi/grubhub-mcp/commit/6b7ea9d9b718e1f690916180df382a9146a2311a))
+
+### Features
+
+- Shared streamable-HTTP transport with server-side read-only mode (#1)
+  ([#1](https://github.com/karbassi/grubhub-mcp/pull/1),
+  [`a555ea1`](https://github.com/karbassi/grubhub-mcp/commit/a555ea19b5df7fc79e13ecc40d67f3e5c667aa07))
+
+
 ## v1.1.7 (2026-10-09)
 
 ### Bug Fixes
